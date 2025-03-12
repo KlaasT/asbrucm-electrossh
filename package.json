@@ -1,0 +1,54 @@
+{
+  "name": "asbru-cm-electro-ssh",
+  "version": "1.0.0",
+  "main": "main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "build:css:dev": "tailwindcss -i ./styles/input.css -o ./styles/output.css --watch",
+    "build:css": "tailwindcss -i ./styles/input.css -o ./styles/output.css",
+    "build": "npm run build:css && electron-builder",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "mitt": "^2.0.1",
+    "nanoid": "^3.3.9",
+    "node-ssh": "^13.2.0",
+    "tailwindcss": "^3.4.13",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "net.asbru-cm.ssh",
+    "productName": "Asbru-CM ElectroSSH",
+    "win": {
+      "icon": "images/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "files": [
+      "main.js",
+      "src/**/*",
+      "*.html",
+      "styles/output.css",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      "styles/output.css"
+    ]
+  }
+}

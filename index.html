@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>asbru-cm ElectroSSH</title>
+    <link rel="stylesheet" href="node_modules/xterm/css/xterm.css" />
+    <link rel="stylesheet" href="styles/output.css" />
+</head>
+<body class="bg-black flex h-screen">
+<div id="sidebar" class="w-[300px] bg-dark-bg text-white p-4 overflow-y-auto flex-shrink-0">
+    <h5 class="text-lg font-semibold mb-4">Favorites</h5>
+    <div id="favorites-list"></div>
+    <button id="add-favorite-btn" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white text-sm py-1 px-2 rounded">Add Favorite</button>
+</div>
+<div id="main-content" class="flex-grow flex flex-col min-h-0 max-h-full">
+    <div id="tab-container" class="bg-dark-bg flex-shrink-0 shadow-md">
+        <ul id="terminal-tabs" class="flex border-b border-gray-700 bg-gray-800" role="tablist">
+            <!-- Tabs will be dynamically added here -->
+        </ul>
+    </div>
+    <div id="terminal-container" class="flex-grow relative overflow-y-auto min-h-0 bg-gray-900 border border-gray-700 rounded-md m-2">
+        <!-- Terminal content goes here -->
+    </div>
+    <div id="new-tab-btn-container" class="bg-dark-bg p-2 text-center flex-shrink-0 shadow-md">
+        <button id="new-tab-btn" class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded mr-2 shadow-sm">New Tab</button>
+        <button id="settings-btn" class="bg-gray-600 hover:bg-gray-700 text-white py-1 px-3 rounded shadow-sm">Settings</button>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" tabindex="-1">
+    <div class="bg-white rounded-lg w-96 p-4 shadow-lg">
+        <div class="flex justify-between items-center mb-4">
+            <h5 class="text-lg font-semibold">Settings</h5>
+            <button class="text-gray-600 hover:text-gray-800" data-dismiss="modal">✕</button>
+        </div>
+        <div>
+            <label class="flex items-center mb-2">
+                <input type="checkbox" id="useSshKey" class="mr-2" onchange="window.api.toggleSshKeyInput()">
+                <span>Use SSH Key Authentication</span>
+            </label>
+            <div id="sshKeyInput" class="hidden mt-2">
+                <label for="sshKeyPath" class="block text-sm">SSH Private Key Path</label>
+                <input type="text" id="sshKeyPath" class="w-full border rounded p-1 mt-1" readonly>
+                <button class="mt-2 bg-gray-600 hover:bg-gray-700 text-white text-sm py-1 px-2 rounded" onclick="window.api.selectSshKey()">Select Key</button>
+            </div>
+        </div>
+        <div class="mt-4 flex justify-end">
+            <button class="bg-gray-600 hover:bg-gray-700 text-white py-1 px-3 rounded mr-2" data-dismiss="modal">Close</button>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded" onclick="window.api.saveSettings()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Favorite Modal -->
+<div id="favoriteModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center" tabindex="-1">
+    <div class="bg-white rounded-lg w-96 p-4 shadow-lg">
+        <div class="flex justify-between items-center mb-4">
+            <h5 id="favoriteModalLabel" class="text-lg font-semibold">Add/Edit Favorite</h5>
+            <button class="text-gray-600 hover:text-gray-800" data-dismiss="modal">✕</button>
+        </div>
+        <div>
+            <label for="favDisplayName" class="block text-sm">Display Name</label>
+            <input type="text" id="favDisplayName" class="w-full border rounded p-1 mt-1 mb-2">
+            <label for="favHostname" class="block text-sm">Hostname</label>
+            <input type="text" id="favHostname" class="w-full border rounded p-1 mt-1 mb-2">
+            <label for="favUsername" class="block text-sm">Username</label>
+            <input type="text" id="favUsername" class="w-full border rounded p-1 mt-1 mb-2">
+            <label for="favPassword" class="block text-sm">Password (optional)</label>
+            <input type="password" id="favPassword" class="w-full border rounded p-1 mt-1 mb-2">
+            <label for="favKeyPath" class="block text-sm">Key Path (optional)</label>
+            <input type="text" id="favKeyPath" class="w-full border rounded p-1 mt-1 mb-2" readonly>
+            <button class="bg-gray-600 hover:bg-gray-700 text-white text-sm py-1 px-2 rounded mt-1" onclick="window.api.selectFavKeyPath()">Select Key</button>
+            <label for="favPort" class="block text-sm mt-2">Port</label>
+            <input type="number" id="favPort" class="w-full border rounded p-1 mt-1 mb-2" value="22">
+            <label for="favGroup" class="block text-sm">Group</label>
+            <input type="text" id="favGroup" class="w-full border rounded p-1 mt-1 mb-2" placeholder="e.g., Work, Home">
+        </div>
+        <div class="mt-4 flex justify-end">
+            <button class="bg-gray-600 hover:bg-gray-700 text-white py-1 px-3 rounded mr-2" data-dismiss="modal">Close</button>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded" onclick="window.api.saveFavorite()">Save</button>
+        </div>
+    </div>
+</div>
+
+<script src="src/renderer.js"></script>
+</body>
+</html>
