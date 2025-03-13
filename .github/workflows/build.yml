@@ -73,6 +73,8 @@ jobs:
         with:
           name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
           path: dist/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release snapshot
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -84,4 +86,4 @@ jobs:
           files: dist/*
           fail_on_unmatched_files: false
         env:
-          GITHUB_TOKEN: ${{ secrets.DEPLOY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
