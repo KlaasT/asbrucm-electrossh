@@ -22,6 +22,7 @@ I'm a web developer, means I can talk to you in Javascript, PHP, HTML and CSS. I
 - SSH connection support (via `node-ssh`)
 - Favorites management with optional password/key storage
 - Built as a Windows `.exe`
+- Should be buildable as AppImage for Linux
 
 ## Warning
 - **Not Security-Checked**: Passwords are stored in plaintext via `electron-store`. Use at your own risk, especially on shared machines.
@@ -34,6 +35,8 @@ I'm a web developer, means I can talk to you in Javascript, PHP, HTML and CSS. I
 3. `npm start` (runs locally)
 4. `npm run build` (builds `.exe` for Windows)
 
+Or try one of the artifacts in the releases.
+
 ## Dependencies
 - Electron
 - Xterm.js + FitAddon
@@ -41,6 +44,7 @@ I'm a web developer, means I can talk to you in Javascript, PHP, HTML and CSS. I
 - node-ssh
 - electron-store
 - nanoid, mitt
+- vue
 
 Feel free to poke around, but don’t rely on this for critical or secure tasks.
 
@@ -51,6 +55,6 @@ and whenever I need an addition. I am open to suggestions and improvements.
 
 ## License
 
-MIT License
+GPL-3.0
 
 ``` 
