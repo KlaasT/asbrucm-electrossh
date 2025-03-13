@@ -56,9 +56,7 @@
     "linux": {
       "icon": "images/icon.png",
       "target": [
-        "AppImage",
-        "deb",
-        "rpm"
+        "AppImage"
       ],
       "category": "Utility"
     },
