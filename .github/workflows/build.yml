@@ -91,7 +91,7 @@ jobs:
         with:
           tag_name: snapshot-${{ steps.set_short_sha.outputs.SHORT_SHA }}
           name: Snapshot Release ${{ steps.set_short_sha.outputs.SHORT_SHA }}
-          draft: false
+          draft: true
           files: |
             dist/*.exe
             dist/*.AppImage
