@@ -1,17 +1,20 @@
 {
   "name": "asbru-cm-electro-ssh",
-  "version": "1.0.0",
+  "title": "Asbru-CM ElectroSSH",
+  "version": "0.0.1",
+  "type": "module",
   "main": "main.js",
-  "type": "commonjs",
   "scripts": {
-    "start": "electron .",
+    "start": "vite",
+    "electron:dev": "vite --host & wait-for-localhost 5173 && electron .",
+    "build": "npm run build:css && vite build",
     "build:css:dev": "tailwindcss -i ./styles/input.css -o ./styles/output.css --watch",
     "build:css": "tailwindcss -i ./styles/input.css -o ./styles/output.css",
-    "build": "npm run build:css && electron-builder",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "npm run build && electron-builder",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
+    "@vueuse/head": "^2.0.0",
     "electron-store": "^8.1.0",
     "mitt": "^2.0.1",
     "nanoid": "^3.3.9",
@@ -21,10 +24,15 @@
     "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
-    "electron": "^31.0.0",
+    "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.20",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "postcss": "^8.4.47",
-    "electron-builder": "^24.13.3"
+    "vite": "^5.4.14",
+    "vite-plugin-electron": "^0.29.0",
+    "vue": "^3.5.13",
+    "wait-for-localhost": "^4.1.0"
   },
   "build": {
     "appId": "net.asbru-cm.ssh",
@@ -40,12 +48,19 @@
         }
       ]
     },
+    "linux": {
+      "icon": "images/icon.png",
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility"
+    },
     "files": [
       "main.js",
-      "src/**/*",
-      "*.html",
-      "styles/output.css",
-      "node_modules/**/*"
+      "dist/**/*",
+      "styles/output.css"
     ],
     "extraResources": [
       "styles/output.css"

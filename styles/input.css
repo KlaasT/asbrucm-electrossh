@@ -2,9 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-    html, body { @apply h-full overflow-hidden; }
+:root {
+    --dark: #212529;
+    --dark-hover: #343a40;
+    --light-text: #adb5bd;
 }
+
+@layer base {
+    html, body {
+        @apply h-full overflow-hidden;
+    }
+}
+
+/* General UI Enhancements */
+
+
+#sidebar {
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.3);
+}
+
+button {
+    transition: all 0.2s ease;
+}
+
+.bg-gray-600.border-blue-500 {
+    background: linear-gradient(to bottom, #4b5563, #374151);
+}
+
+/* Custom Tailwind Classes */
+@layer utilities {
+    .bg-dark {
+        background-color: var(--dark);
+    }
+    .bg-dark-hover {
+        background-color: var(--dark-hover);
+    }
+    .text-light-text {
+        color: var(--light-text);
+    }
+}
+
+
+
 /* Terminal Container */
 #terminal-container {
     overflow-y: auto;
@@ -40,7 +79,7 @@ body {
 }
 
 #tab-container {
-    border-bottom: 1px solid #4b5563;
+    border-bottom: 0px solid #4b5563;
 }
 
 button {

@@ -1,20 +1,32 @@
-const { Terminal } = require('xterm');
-const { FitAddon } = require('xterm-addon-fit');
-const { exec } = require('child_process');
-const os = require('os');
-const { connectSSH } = require('./ssh');
+import { Terminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
+import os from 'os';
 
-function createTerminal(tabId, container, onData) {
+const { ipcRenderer } = window.require('electron');
+
+function createTerminal(tabId, container) {
     const term = new Terminal({
         cursorBlink: true,
         allowTransparency: true,
         scrollback: 1000,
-        theme: { background: '#1a1a1a' }
+        theme: { background: '#1a1a1a' },
+        disableStdin: false, // Ensure stdin is enabled
+        convertEol: true,    // Convert newlines to CRLF for SSH compatibility
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
 
-    const state = { currentCommand: '', inputMode: 'command', promptCallback: null, sshHost: '', sshUsername: '', shellStream: null, sshAttempts: 0, sshProcess: null, port: 22 };
+    const state = {
+        currentCommand: '',
+        inputMode: 'command',
+        promptCallback: null,
+        sshHost: '',
+        sshUsername: '',
+        shellStream: false,
+        sshAttempts: 0,
+        sshProcess: null,
+        port: 22,
+    };
 
     const termDiv = document.createElement('div');
     termDiv.id = `terminal-${tabId}`;
@@ -30,13 +42,22 @@ function createTerminal(tabId, container, onData) {
     term.element.style.MozUserSelect = 'text';
     term.element.style.msUserSelect = 'text';
 
-    // Initial fit (optional, we'll rely on later resize)
-    // fitAddon.fit();
+    // Listen for SSH data and close events
+    ipcRenderer.on(`ssh-data-${tabId}`, (event, data) => {
+        term.write(data);
+    });
+    ipcRenderer.on(`ssh-close-${tabId}`, () => {
+        term.write('\r\nConnection closed.\r\n$ ');
+        state.shellStream = false;
+        state.inputMode = 'command';
+    });
 
+    // Handle terminal input
     term.onData(data => {
         if (data === '\x03') { // Ctrl+C
-            if (state.shellStream) state.shellStream.write('\x03');
-            else if (state.inputMode !== 'command') {
+            if (state.shellStream) {
+                ipcRenderer.send('ssh-input', { tabId, data });
+            } else if (state.inputMode !== 'command') {
                 term.write('\r\nAborted.\r\n$ ');
                 state.inputMode = 'command';
                 state.currentCommand = '';
@@ -50,7 +71,7 @@ function createTerminal(tabId, container, onData) {
         }
 
         if (state.shellStream) {
-            state.shellStream.write(data);
+            ipcRenderer.send('ssh-input', { tabId, data });
             return;
         }
 
@@ -79,20 +100,21 @@ function createTerminal(tabId, container, onData) {
                             state.inputMode = 'username';
                             state.promptCallback = (username) => {
                                 state.sshUsername = username || os.userInfo().username;
-                                term.write(`Connecting to ${state.sshUsername}@${state.sshHost}...\r\n`);
-                                connectSSH({ term, state }, { host: state.sshHost, username: state.sshUsername, port: state.port });
+                                connectSSH(tabId, term, state, { host: state.sshHost, username: state.sshUsername, port: state.port });
                             };
                         } else {
-                            term.write(`Connecting to ${state.sshUsername}@${state.sshHost}...\r\n`);
-                            connectSSH({ term, state }, { host: state.sshHost, username: state.sshUsername, port: state.port });
+                            connectSSH(tabId, term, state, { host: state.sshHost, username: state.sshUsername, port: state.port });
                         }
                     } else {
                         term.write('Invalid format. Use: ssh [user@]host\r\n$ ');
                     }
                 } else if (state.currentCommand) {
-                    exec(state.currentCommand, (error, stdout, stderr) => {
-                        if (error) term.write(`Error: ${stderr || error.message}\r\n$ `);
-                        else term.write(stdout + '$ ');
+                    ipcRenderer.invoke('exec-command', { tabId, command: state.currentCommand }).then(result => {
+                        if (result.success) {
+                            term.write(`${result.output}$ `);
+                        } else {
+                            term.write(`Error: ${result.output}\r\n$ `);
+                        }
                     });
                 } else {
                     term.write('$ ');
@@ -147,10 +169,43 @@ function createTerminal(tabId, container, onData) {
     return { id: tabId, term, state, fitAddon };
 }
 
-function resizeTerminal(term, fitAddon) {
-    if (fitAddon) {
-        fitAddon.fit();
+async function connectSSH(tabId, term, state, options) {
+    const settings = await ipcRenderer.invoke('get-settings');
+
+    const finalOptions = {
+        ...options,
+        keyPath: settings.useSshKey ? settings.sshKeyPath : null,
+    };
+
+    term.write(`Connecting to ${state.sshUsername}@${state.sshHost}...\r\n`);
+    const result = await ipcRenderer.invoke('connect-ssh', { tabId, options: finalOptions });
+
+    if (result.success) {
+        term.write('Connected!\r\n');
+        term.reset();
+        state.shellStream = true;
+    } else {
+        term.write(`Connection failed: ${result.error}\r\n`);
+        if (!options.password) {
+            term.write(`Password for ${state.sshUsername}@${state.sshHost}: `);
+            state.inputMode = 'password';
+            state.sshAttempts = 0;
+            state.promptCallback = pwd => connectSSH(tabId, term, state, { ...options, password: pwd });
+        } else if (state.sshAttempts < 3) {
+            state.sshAttempts++;
+            term.write(`Attempt ${state.sshAttempts}/3 failed. Password: `);
+            state.inputMode = 'password';
+            state.promptCallback = pwd => connectSSH(tabId, term, state, { ...options, password: pwd });
+        } else {
+            term.write('No attempts left.\r\n$ ');
+            state.inputMode = 'command';
+            state.sshAttempts = 0;
+        }
     }
 }
 
-module.exports = { createTerminal, resizeTerminal };
+function resizeTerminal(term, fitAddon) {
+    if (fitAddon) fitAddon.fit();
+}
+
+export { createTerminal, resizeTerminal };

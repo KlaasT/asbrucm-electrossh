@@ -1,0 +1,64 @@
+name: Build and Release Snapshots
+
+on:
+  push:
+    branches:
+      - main  # Trigger on pushes to main branch
+  pull_request:
+    branches:
+      - main  # Trigger on PRs to main branch
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]  # Build on Windows and Linux runners
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build CSS
+        run: npm run build:css
+
+      - name: Build app
+        run: npm run build
+
+      - name: Build for Windows
+        if: matrix.os == 'windows-latest'
+        run: npm run dist
+        env:
+          ELECTRON_BUILDER_CACHE: true
+
+      - name: Build for Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run dist:linux
+        env:
+          ELECTRON_BUILDER_CACHE: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
+          path: dist/*  # Upload all files in the dist directory
+
+      - name: Release snapshot
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'  # Only on push to main
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: snapshot-${{ github.sha }}
+          name: Snapshot Release ${{ github.sha }}
+          draft: true  # Mark as draft release
+          files: dist/*  # Attach all dist files as release assets
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
