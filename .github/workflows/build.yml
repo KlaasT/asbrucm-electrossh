@@ -50,6 +50,9 @@ jobs:
           sudo apt-get update && sudo apt-get install -y p7zip-full
           echo "p7zip installed."
 
+      - name: Set short sha
+        run: echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
       - name: Build for Windows
         if: matrix.os == 'windows-latest'
         run: |
@@ -73,8 +76,14 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
-          path: dist/*
+          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ SHORT_SHA }}
+          path: |
+            dist/*.exe  # Windows installer
+            dist/*.AppImage  # Linux AppImage
+            dist/*.deb  # Linux deb
+            !dist/builder-debug.yml  # Exclude debug file
+            !dist/index.html  # Exclude Vite output
+            !dist/assets/**  # Exclude Vite assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -82,10 +91,13 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: snapshot-${{ github.sha }}
-          name: Snapshot Release ${{ github.sha }}
-          draft: true
-          files: dist/*
+          tag_name: snapshot-${{ SHORT_SHA }}
+          name: Snapshot Release ${{ SHORT_SHA }}
+          draft: false
+          files: |
+            dist/*.exe
+            dist/*.AppImage
+            dist/*.deb
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
