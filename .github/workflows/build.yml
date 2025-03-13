@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.14'
+          node-version: '20'  # Revert to Node 20 for stability (adjust if 22 is required)
 
       - name: Install dependencies
         run: |
@@ -47,7 +47,8 @@ jobs:
           sudo apt-get update && sudo apt-get install -y p7zip-full
           echo "p7zip installed."
 
-      - name: Set short sha
+      - name: Set short SHA
+        id: set_short_sha  # Assign an ID to the step for output reference
         run: echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
       - name: Build for Windows
@@ -57,7 +58,7 @@ jobs:
           npm run dist
           echo "Windows build completed."
         env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_CACHE: true
 
       - name: Build for Linux
@@ -67,13 +68,13 @@ jobs:
           npm run dist:linux
           echo "Linux build completed."
         env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_CACHE: true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{  steps.vars.outputs.SHORT_SHA }}
+          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ steps.set_short_sha.outputs.SHORT_SHA }}
           path: |
             dist/*.exe  # Windows installer
             dist/*.AppImage  # Linux AppImage
@@ -88,8 +89,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: snapshot-${{ steps.vars.outputs.SHORT_SHA }}
-          name: Snapshot Release ${{ steps.vars.outputs.SHORT_SHA }}
+          tag_name: snapshot-${{ steps.set_short_sha.outputs.SHORT_SHA }}
+          name: Snapshot Release ${{ steps.set_short_sha.outputs.SHORT_SHA }}
           draft: false
           files: |
             dist/*.exe
