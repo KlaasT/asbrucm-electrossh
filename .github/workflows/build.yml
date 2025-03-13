@@ -57,6 +57,7 @@ jobs:
           npm run dist
           echo "Windows build completed."
         env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
           ELECTRON_BUILDER_CACHE: true
 
       - name: Build for Linux
@@ -66,6 +67,7 @@ jobs:
           npm run dist:linux
           echo "Linux build completed."
         env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
           ELECTRON_BUILDER_CACHE: true
 
       - name: Upload artifacts
@@ -74,7 +76,7 @@ jobs:
           name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
           path: dist/*
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release snapshot
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -86,4 +88,4 @@ jobs:
           files: dist/*
           fail_on_unmatched_files: false
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
