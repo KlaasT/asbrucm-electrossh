@@ -7,8 +7,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Use ubuntu-latest as the base runner (can handle cross-builds)
-    timeout-minutes: 30  # Increase timeout to accommodate sequential builds
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -17,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # Revert to Node 20 for stability
+          node-version: '20'  # Revert to Node 20 for stability (adjust if 22 is required)
 
       - name: Install dependencies
         run: |
@@ -37,26 +40,22 @@ jobs:
           npm run build
           echo "App build completed."
 
-      - name: Install updated p7zip (Linux)
-        run: |
-          echo "Installing updated p7zip..."
-          sudo apt-get update && sudo apt-get install -y p7zip-full
-          echo "p7zip installed."
-
       - name: Set short SHA
-        id: set_short_sha
+        id: set_short_sha  # Assign an ID to the step for output reference
         run: echo "SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
 
-      - name: Build for Windows (cross-build on Linux)
+      - name: Build for Windows
+        if: matrix.os == 'windows-latest'
         run: |
           echo "Building for Windows..."
-          npm run dist -- --windows
+          npm run dist
           echo "Windows build completed."
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_BUILDER_CACHE: true
 
       - name: Build for Linux
+        if: matrix.os == 'ubuntu-latest'
         run: |
           echo "Building for Linux..."
           npm run dist:linux
@@ -68,7 +67,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: asbru-cm-electro-ssh-${{ steps.set_short_sha.outputs.SHORT_SHA }}
+          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
           path: |
             dist/*.exe  # Windows installer
             dist/*.AppImage  # Linux AppImage
@@ -83,8 +82,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: snapshot-${{ steps.set_short_sha.outputs.SHORT_SHA }}
-          name: Snapshot Release ${{ steps.set_short_sha.outputs.SHORT_SHA }}
+          tag_name: snapshot-${{ github.sha }}
+          name: Snapshot Release ${{ github.sha }}
           draft: true
           files: |
             dist/*.exe
