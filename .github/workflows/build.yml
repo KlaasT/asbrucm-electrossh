@@ -3,17 +3,18 @@ name: Build and Release Snapshots
 on:
   push:
     branches:
-      - main  # Trigger on pushes to main branch
+      - main
   pull_request:
     branches:
-      - main  # Trigger on PRs to main branch
+      - main
 
 jobs:
   build:
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest]  # Build on Windows and Linux runners
+        os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15  # Increase timeout to 15 minutes
 
     steps:
       - name: Checkout code
@@ -25,23 +26,38 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          echo "Installing dependencies..."
+          npm install --verbose
+          echo "Dependencies installed successfully."
 
       - name: Build CSS
-        run: npm run build:css
+        run: |
+          echo "Building CSS..."
+          npm run build:css
+          echo "CSS build completed."
 
       - name: Build app
-        run: npm run build
+        run: |
+          echo "Building app..."
+          npm run build
+          echo "App build completed."
 
       - name: Build for Windows
         if: matrix.os == 'windows-latest'
-        run: npm run dist
+        run: |
+          echo "Building for Windows..."
+          npm run dist
+          echo "Windows build completed."
         env:
           ELECTRON_BUILDER_CACHE: true
 
       - name: Build for Linux
         if: matrix.os == 'ubuntu-latest'
-        run: npm run dist:linux
+        run: |
+          echo "Building for Linux..."
+          npm run dist:linux
+          echo "Linux build completed."
         env:
           ELECTRON_BUILDER_CACHE: true
 
@@ -49,16 +65,16 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
-          path: dist/*  # Upload all files in the dist directory
+          path: dist/*
 
       - name: Release snapshot
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'  # Only on push to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: snapshot-${{ github.sha }}
           name: Snapshot Release ${{ github.sha }}
-          draft: true  # Mark as draft release
-          files: dist/*  # Attach all dist files as release assets
+          draft: true
+          files: dist/*
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

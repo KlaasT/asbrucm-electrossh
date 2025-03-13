@@ -4,6 +4,11 @@
   "version": "0.0.1",
   "type": "module",
   "main": "main.js",
+  "author": {
+    "name": "Klaas Tammling",
+    "email": "klaas@tammling.hamburg"
+  },
+  "description": "An SSH connection manager built with Electron and Vue",
   "scripts": {
     "start": "vite",
     "electron:dev": "vite --host & wait-for-localhost 5173 && electron .",
