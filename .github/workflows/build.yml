@@ -1,31 +1,87 @@
-name: Build/release
+name: Build and Release Snapshots
 
-on: push
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  release:
-    runs-on: ${{ matrix.os }}
-
+  build:
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
 
     steps:
-      - name: Check out Git repository
-        uses: actions/checkout@v1
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Install Node.js, NPM and Yarn
-        uses: actions/setup-node@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 10
+          node-version: '20'
 
-      - name: Build/release Electron app
-        uses: samuelmeuli/action-electron-builder@v1
+      - name: Install dependencies
+        run: |
+          echo "Installing dependencies..."
+          npm install --verbose
+          echo "Dependencies installed successfully."
+
+      - name: Build CSS
+        run: |
+          echo "Building CSS..."
+          npm run build:css
+          echo "CSS build completed."
+
+      - name: Build app
+        run: |
+          echo "Building app..."
+          npm run build
+          echo "App build completed."
+
+      - name: Install updated p7zip (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo "Installing updated p7zip..."
+          sudo apt-get update && sudo apt-get install -y p7zip-full
+          echo "p7zip installed."
+
+      - name: Build for Windows
+        if: matrix.os == 'windows-latest'
+        run: |
+          echo "Building for Windows..."
+          npm run dist
+          echo "Windows build completed."
+        env:
+          ELECTRON_BUILDER_CACHE: true
+
+      - name: Build for Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          echo "Building for Linux..."
+          npm run dist:linux
+          echo "Linux build completed."
+        env:
+          ELECTRON_BUILDER_CACHE: true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          # GitHub token, automatically provided to the action
-          # (No need to define this secret in the repo settings)
-          github_token: ${{ secrets.github_token }}
+          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
+          path: dist/*
 
-          # If the commit is tagged with a version (e.g. "v1.0.0"),
-          # release the app after building
-          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      - name: Release snapshot
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: snapshot-${{ github.sha }}
+          name: Snapshot Release ${{ github.sha }}
+          draft: true
+          files: dist/*
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
