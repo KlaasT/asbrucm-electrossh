@@ -73,7 +73,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ SHORT_SHA }}
+          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{  steps.vars.outputs.SHORT_SHA }}
           path: |
             dist/*.exe  # Windows installer
             dist/*.AppImage  # Linux AppImage
@@ -88,8 +88,8 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: snapshot-${{ SHORT_SHA }}
-          name: Snapshot Release ${{ SHORT_SHA }}
+          tag_name: snapshot-${{ steps.vars.outputs.SHORT_SHA }}
+          name: Snapshot Release ${{ steps.vars.outputs.SHORT_SHA }}
           draft: false
           files: |
             dist/*.exe
