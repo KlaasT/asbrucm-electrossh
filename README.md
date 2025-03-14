@@ -45,6 +45,7 @@ Or try one of the artifacts in the releases.
 - electron-store
 - nanoid, mitt
 - vue
+- node-pty
 
 Feel free to poke around, but don’t rely on this for critical or secure tasks.
 
@@ -52,6 +53,13 @@ Feel free to poke around, but don’t rely on this for critical or secure tasks.
 
 If you want to contribute or have wished I am open to PRs and issues. At the moment I am developing this in my free time
 and whenever I need an addition. I am open to suggestions and improvements.
+
+## Screenshots
+
+<img src="/screenshots/electrossh1.png" style="width: 550px" />
+<img src="/screenshots/electrossh2.png" style="width: 550px" />
+<img src="/screenshots/electrossh3.png" style="width: 550px" />
+
 
 ## License
 
