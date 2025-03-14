@@ -123,12 +123,16 @@ async function connectSSH(tabId, term, state, options) {
         return { useSshKey: false, sshKeyPath: '' };
     });
 
+    term.write('Connecting...\r\n');
+
     const finalOptions = {
         ...options,
-        keyPath: settings.useSshKey && settings.sshKeyPath ? settings.sshKeyPath : null,
+        keyPath: options.keyPath && options.keyPath.trim() !== ''
+            ? options.keyPath
+            : (settings.useSshKey && settings.sshKeyPath ? settings.sshKeyPath.trim() : null),
     };
 
-    term.write(`Connecting to ${options.username || 'unknown'}@${options.host}...\r\n`);
+    term.write(`\r\nConnecting to ${options.username || 'unknown'}@${options.host}...\r\n`);
     const result = await ipcRenderer.invoke('connect-ssh', { tabId, options: finalOptions }).catch(err => {
         return { success: false, error: err.message };
     });
@@ -139,23 +143,10 @@ async function connectSSH(tabId, term, state, options) {
         state.shellType = 'ssh';
         state.shellStream = true;
 
-        // Only rename the display name, NOT the tab ID
         ipcRenderer.send('update-tab-display-name', { tabId, newName: `${options.username || 'user'}@${options.host}` });
     } else {
-        term.write(`Connection failed: ${result.error}\r\n`);
+        term.write(`\r\nConnection failed: ${result.error}\r\n`);
         state.shellType = 'local';
-
-        ipcRenderer.invoke('spawn-local-shell', { tabId, disableEcho: true }).then((res) => {
-            if (res.success) {
-                state.shellStream = true;
-                term.write('$ ');
-            } else {
-                term.write('Failed to restart local shell after SSH failure.\r\n');
-            }
-        }).catch(err => {
-            term.write('Error restarting local shell.\r\n');
-            console.error(`Error restarting local shell for tab ${tabId}:`, err);
-        });
     }
 }
 

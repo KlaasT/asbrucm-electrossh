@@ -185,6 +185,7 @@ export default {
             username: favorite.username || '',
             port: favorite.port || 22,
             password: favorite.password || '',
+            keyPath: favorite.keyPath || '',
           };
           await connectSSH(tabId, terminal.term, terminal.state, options);
         } else {

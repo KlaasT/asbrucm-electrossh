@@ -111,7 +111,6 @@ try {
     ipcMain.on('pty-input', (event, { tabId, data }) => {
         const ptyProcess = ptyProcesses.get(tabId);
         if (ptyProcess) {
-            console.log(`PTY processing input (tab ${tabId}): "${data}"`);
             ptyProcess.write(data); // Send input to PTY
         } else {
             console.log('No active PTY process for tab:', tabId);
@@ -165,7 +164,6 @@ try {
     ipcMain.on('ssh-input', (event, { tabId, data }) => {
         const connection = sshConnections.get(tabId);
         if (connection && connection.shellStream) {
-            console.log(`SSH processing (tab ${tabId}): ${data}`);
             connection.shellStream.write(data);
         } else {
             console.log('No active SSH connection for tab:', tabId);
