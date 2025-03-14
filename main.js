@@ -1,13 +1,12 @@
 import { app, BrowserWindow, ipcMain, dialog, Menu } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url'; // Import url module to handle ES modules
+import { fileURLToPath } from 'url';
 import Store from 'electron-store';
 import { NodeSSH } from 'node-ssh';
 import fs from 'fs';
-import { exec } from 'child_process';
+import pty from 'node-pty';
 import { nanoid } from 'nanoid';
 
-// Derive __dirname and __filename in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -18,7 +17,6 @@ console.log('Starting main.js');
 try {
     const store = new Store();
 
-    // Read package.json
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
 
@@ -63,16 +61,77 @@ try {
         if (isDev) {
             win.loadURL('http://localhost:5173').catch(err => console.error('Failed to load dev server:', err));
         } else {
-            // Use __dirname to load the built index.html
             win.loadFile(path.join(__dirname, 'dist/index.html')).catch(err => {
                 console.error('Failed to load index.html:', err);
             });
         }
         win.maximize();
-        //win.webContents.openDevTools();
+        if (isDev) {
+            win.webContents.openDevTools();
+        }
     }
 
     const sshConnections = new Map();
+    const ptyProcesses = new Map();
+
+    ipcMain.handle('spawn-local-shell', async (event, { tabId, disableEcho }) => {
+        try {
+            const shellCmd = process.platform === 'win32' ? 'powershell.exe' : process.env.SHELL || '/bin/bash';
+            const shellArgs = process.platform === 'win32' ? ['-NoExit'] : [];
+
+            console.log(`Spawning local shell for tab ${tabId} with shell: ${shellCmd}`);
+
+            const ptyProcess = pty.spawn(shellCmd, shellArgs, {
+                name: 'xterm-color',
+                cols: 80,
+                rows: 30,
+                cwd: process.env.HOME || process.env.USERPROFILE,
+                env: process.env
+            });
+
+            // 🛠 Store the PTY process in the map
+            ptyProcesses.set(tabId, ptyProcess);
+
+            ptyProcess.on('data', (data) => {
+                event.sender.send(`pty-data-${tabId}`, data);
+            });
+
+            ptyProcess.on('exit', () => {
+                event.sender.send(`pty-close-${tabId}`);
+                ptyProcesses.delete(tabId); // 🛠 Remove PTY when it exits
+            });
+
+            return { success: true };
+        } catch (err) {
+            console.error(`Failed to spawn shell for tab ${tabId}:`, err);
+            return { success: false, error: err.message };
+        }
+    });
+
+    ipcMain.on('pty-input', (event, { tabId, data }) => {
+        const ptyProcess = ptyProcesses.get(tabId);
+        if (ptyProcess) {
+            console.log(`PTY processing input (tab ${tabId}): "${data}"`);
+            ptyProcess.write(data); // Send input to PTY
+        } else {
+            console.log('No active PTY process for tab:', tabId);
+        }
+    });
+
+    ipcMain.on('resize-pty', (event, { tabId, cols, rows }) => {
+        const ptyProcess = ptyProcesses.get(tabId);
+        if (ptyProcess) {
+            ptyProcess.resize(cols, rows);
+        }
+    });
+
+    ipcMain.on('kill-pty', (event, tabId) => {
+        const ptyProcess = ptyProcesses.get(tabId);
+        if (ptyProcess) {
+            ptyProcess.kill();
+            ptyProcesses.delete(tabId);
+        }
+    });
 
     ipcMain.handle('connect-ssh', async (event, { tabId, options }) => {
         const ssh = new NodeSSH();
@@ -106,6 +165,7 @@ try {
     ipcMain.on('ssh-input', (event, { tabId, data }) => {
         const connection = sshConnections.get(tabId);
         if (connection && connection.shellStream) {
+            console.log(`SSH processing (tab ${tabId}): ${data}`);
             connection.shellStream.write(data);
         } else {
             console.log('No active SSH connection for tab:', tabId);
@@ -118,18 +178,6 @@ try {
             connection.ssh.dispose();
             sshConnections.delete(tabId);
         }
-    });
-
-    ipcMain.handle('exec-command', async (event, { tabId, command }) => {
-        return new Promise((resolve) => {
-            exec(command, (error, stdout, stderr) => {
-                if (error) {
-                    resolve({ success: false, output: stderr || error.message });
-                } else {
-                    resolve({ success: true, output: stdout });
-                }
-            });
-        });
     });
 
     ipcMain.handle('select-ssh-key', async () => {
@@ -176,6 +224,6 @@ try {
         if (process.platform !== 'darwin') app.quit();
     });
 } catch (error) {
-    console.error('Failed to initialize electron-store:', error);
+    console.error('Failed to initialize electron app:', error);
     app.quit();
 }

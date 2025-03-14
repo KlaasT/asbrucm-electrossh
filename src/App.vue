@@ -52,9 +52,8 @@
 
 <script>
 import { ref, onMounted, nextTick } from 'vue';
-import { useHead } from '@vueuse/head';
 import { nanoid } from 'nanoid';
-import { createTerminal, resizeTerminal } from './terminal.js';
+import { createTerminal, resizeTerminal, connectSSH } from './terminal.js';
 import SettingsModal from './components/SettingsModal.vue';
 import Favorites from './components/Favorites.vue';
 import FavoriteModal from './components/FavoriteModal.vue';
@@ -68,13 +67,9 @@ export default {
     const showSettingsModal = ref(false);
     const showFavoriteModal = ref(false);
     const editingFavorite = ref(null);
-    const headTitle = ref(''); // Reactive title for the document head
 
-    // Fetch the app title from package.json via IPC
-    onMounted(async () => {
-
-      // Initialize the first tab
-      addTab();
+    onMounted(() => {
+      addTab(); // Start with one tab
     });
 
     const addTab = () => {
@@ -86,10 +81,12 @@ export default {
       nextTick(() => {
         const container = document.getElementById(`terminal-${tabId}`);
         if (container) {
+          console.log(`Opening terminal for tab ${tabId}`);
           terminal.term.open(container);
           setTimeout(() => {
             resizeTerminal(terminal.term, terminal.fitAddon);
             if (terminal.id === terminals.value.activeTabId) {
+              console.log(`Focusing terminal for tab ${tabId}`);
               terminal.term.focus();
             }
           }, 100);
@@ -106,6 +103,7 @@ export default {
       nextTick(() => {
         const terminal = terminals.value.list.find(t => t.id === tabId);
         if (terminal) {
+          console.log(`Resizing and focusing tab ${tabId}`);
           setTimeout(() => {
             resizeTerminal(terminal.term, terminal.fitAddon);
             terminal.term.focus();
@@ -115,18 +113,27 @@ export default {
     };
 
     const closeTab = (tabId) => {
-      console.log('Closing tab:', tabId);
+      console.log(`Closing tab: ${tabId}`);
       const index = terminals.value.list.findIndex(t => t.id === tabId);
       if (index === -1) return;
+
       const terminal = terminals.value.list[index];
-      if (terminal.state.shellStream) {
+
+      // If SSH was active, disconnect it before closing the tab
+      if (terminal.state.shellType === 'ssh' && terminal.state.shellStream) {
         ipcRenderer.send('disconnect-ssh', tabId);
       }
+
       terminal.term.dispose();
       terminal.term.element.remove();
       terminals.value.list.splice(index, 1);
+
+      // Automatically switch to another tab, or open a new tab if none remain
       if (terminals.value.activeTabId === tabId) {
-        terminals.value.activeTabId = terminals.value.list.length > 0 ? terminals.value.list[Math.max(0, index - 1)].id : null;
+        terminals.value.activeTabId = terminals.value.list.length > 0
+            ? terminals.value.list[Math.max(0, index - 1)].id
+            : null;
+
         if (!terminals.value.activeTabId) addTab();
       }
     };
@@ -166,37 +173,20 @@ export default {
       nextTick(async () => {
         const container = document.getElementById(`terminal-${tabId}`);
         if (container) {
+          console.log(`Connecting favorite to tab ${tabId}`);
           terminal.term.open(container);
           setTimeout(() => {
             resizeTerminal(terminal.term, terminal.fitAddon);
             terminal.term.focus();
           }, 100);
 
-          const settings = await ipcRenderer.invoke('get-settings');
           const options = {
             host: favorite.hostname,
-            username: favorite.username || (settings.useSshKey ? '' : null),
+            username: favorite.username || '',
             port: favorite.port || 22,
-            keyPath: favorite.keyPath || (settings.useSshKey ? settings.sshKeyPath : null),
             password: favorite.password || '',
           };
-
-          if (!options.username && !options.password && !options.keyPath) {
-            terminal.term.write('No username, password, or key provided, connection failed.\r\n');
-            return;
-          }
-
-          terminal.term.write(`Connecting to ${options.username || 'unknown'}@${favorite.hostname}...\r\n`);
-          const result = await ipcRenderer.invoke('connect-ssh', {tabId, options});
-
-          if (result.success) {
-            terminal.term.write('Connected!\r\n');
-            terminal.term.reset();
-            terminal.state.shellStream = true;
-          } else {
-            terminal.term.write(`Connection failed: ${result.error}\r\n`);
-            terminal.state.inputMode = 'command';
-          }
+          await connectSSH(tabId, terminal.term, terminal.state, options);
         } else {
           console.error(`Container for terminal-${tabId} not found`);
         }
@@ -218,7 +208,6 @@ export default {
       connectToFavorite,
       editFavorite,
       closeFavoriteModal,
-      head: {title: headTitle}, // For compatibility if you're using a different head management method
     };
   },
 };

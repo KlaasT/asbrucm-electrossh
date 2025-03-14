@@ -12,7 +12,7 @@ export default defineConfig({
                     // Ensure main.js is output separately for Electron, not bundled with renderer
                     outDir: 'dist-electron',
                     rollupOptions: {
-                        external: ['electron', 'path', 'fs', 'child_process', 'os', 'node-ssh'], // Externalize Node.js modules
+                        external: ['electron', 'path', 'fs', 'child_process', 'os', 'node-ssh', 'node-pty'], // Externalize Node.js modules
                     },
                 },
             },
