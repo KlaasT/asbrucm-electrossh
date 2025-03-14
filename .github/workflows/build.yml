@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # Revert to Node 20 for stability (adjust if 22 is required)
+          node-version: '22.14'
 
       - name: Install Linux dependencies
         if: matrix.os == 'ubuntu-latest'
