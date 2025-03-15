@@ -70,6 +70,16 @@ export default {
 
     onMounted(() => {
       addTab(); // Start with one tab
+
+      window.addEventListener('resize', () => {
+        console.log('Resize event');
+        if (terminals.value.activeTabId) {
+          const terminal = terminals.value.list.find(t => t.id === terminals.value.activeTabId);
+          if (terminal) {
+            resizeTerminal(terminal.term, terminal.fitAddon);
+          }
+        }
+      });
     });
 
     const addTab = () => {

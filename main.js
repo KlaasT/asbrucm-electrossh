@@ -124,6 +124,18 @@ try {
         }
     });
 
+    ipcMain.on('resize-ssh', (event, { tabId, cols, rows }) => {
+        const connection = sshConnections.get(tabId);
+        if (connection && connection.shellStream) {
+            try {
+                connection.shellStream.setWindow(rows, cols);
+                console.log(`Resized SSH session for tab ${tabId} to ${cols}x${rows}`);
+            } catch (error) {
+                console.error(`Failed to resize SSH session: ${error.message}`);
+            }
+        }
+    });
+
     ipcMain.on('kill-pty', (event, tabId) => {
         const ptyProcess = ptyProcesses.get(tabId);
         if (ptyProcess) {
@@ -166,7 +178,7 @@ try {
         if (connection && connection.shellStream) {
             connection.shellStream.write(data);
         } else {
-            console.log('No active SSH connection for tab:', tabId);
+            console.log(`No active SSH session for tab: ${tabId}`);
         }
     });
 

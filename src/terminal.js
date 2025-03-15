@@ -78,6 +78,14 @@ function createTerminal(tabId, container) {
         if (!state.currentCommand.length) {
             state.promptLength = term.buffer.active.cursorX;
         }
+
+        if (data.includes('\x1b[?1049h')) {
+            console.log("Full-screen app detected (vim), sending resize event...");
+            setTimeout(() => {
+                fitAddon.fit();
+                ipcRenderer.send('resize-ssh', { tabId: tabId, cols: term.cols, rows: term.rows });
+            }, 50);
+        }
     });
 
     ipcRenderer.on(`ssh-close-${tabId}`, () => {
@@ -91,19 +99,48 @@ function createTerminal(tabId, container) {
     term.onData(data => {
         if (!state.shellStream) return;
 
+        let modifiedData = data;
+
+        // Mapping special sequences, so they don't get stuck.
+        const specialKeyMap = {
+            '\x1b[5~': '\x1b[5~', // Page Up
+            '\x1b[6~': '\x1b[6~', // Page Down
+            '\x1b[2~': '\x1b[2~', // Insert
+            '\x1b[3~': '\x1b[3~', // Delete
+            '\x1b[H': '\x1b[1~',  // Home
+            '\x1b[F': '\x1b[4~',  // End
+            '\x1b[A': '\x1b[A',   // Up Arrow
+            '\x1b[B': '\x1b[B',   // Down Arrow
+            '\x1b[C': '\x1b[C',   // Right Arrow
+            '\x1b[D': '\x1b[D'    // Left Arrow
+        };
+
+        if (specialKeyMap[data]) {
+            modifiedData = specialKeyMap[data];
+        }
+
         if (state.shellType === 'ssh') {
-            ipcRenderer.send('ssh-input', { tabId: tabId, data });
+            ipcRenderer.send('ssh-input', { tabId: tabId, data: modifiedData });
         } else if (state.shellType === 'local') {
-            ipcRenderer.send('pty-input', { tabId: tabId, data });
+            ipcRenderer.send('pty-input', { tabId: tabId, data: modifiedData });
         }
     });
 
-
-    // Resize handling
     term.onResize(({ cols, rows }) => {
-        if (state.shellType === 'local' && state.shellStream) {
-            ipcRenderer.send('resize-pty', { tabId: tabId, cols: cols, rows: rows });
-            fitAddon.fit();
+        if (state.shellStream) {
+            if (cols > 0 && rows > 0) {
+                console.log(`Resizing terminal: ${cols}x${rows}`);
+
+                if (state.shellType === 'local') {
+                    ipcRenderer.send('resize-pty', { tabId: tabId, cols, rows });
+                } else if (state.shellType === 'ssh') {
+                    ipcRenderer.send('resize-ssh', { tabId: tabId, cols, rows });
+                }
+
+                fitAddon.fit();
+            } else {
+                console.warn(`Ignoring resize event with invalid values: cols=${cols}, rows=${rows}`);
+            }
         }
     });
 
@@ -138,11 +175,11 @@ async function connectSSH(tabId, term, state, options) {
     });
 
     if (result.success) {
+        ipcRenderer.send('ssh-input', { tabId: tabId, data: 'export TERM=xterm-256color\n' });
         term.write('Connected!\r\n');
         term.reset();
         state.shellType = 'ssh';
         state.shellStream = true;
-
         ipcRenderer.send('update-tab-display-name', { tabId, newName: `${options.username || 'user'}@${options.host}` });
     } else {
         term.write(`\r\nConnection failed: ${result.error}\r\n`);
