@@ -30,13 +30,7 @@ jobs:
         run: |
           echo "Installing dependencies..."
           npm install --verbose
-          echo "Dependencies installed successfully."
-
-      - name: Build CSS
-        run: |
-          echo "Building CSS..."
-          npm run build:css
-          echo "CSS build completed."
+          echo "Dependencies installed successfully.
 
       - name: Build app
         run: |
