@@ -2,6 +2,10 @@
 
 This is a quick, hacked-together terminal manager I built because I couldn’t find a simple solution for managing SSH connections in a tabbed interface. It uses Electron, Xterm.js, and Tailwind CSS to provide a basic GUI for SSH sessions with a favorites list.
 
+# Disclaimer about AI use
+
+This is a project to play for me and I have used AI to generate some of the code and documentation. I have not done a thorough review of the generated code, so there may be security issues, bugs, or other problems. Use at your own risk, and please let me know if you find any issues.
+
 ## Why asbru-cm?
 
 Some of you may recognize the name from the [Asbru Connection Manager](https://www.asbru-cm.com/), an opensource SSH client that I am involved in.

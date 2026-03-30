@@ -1,13 +1,7 @@
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 
-const { ipcRenderer } = window.require('electron');
-
-// Function to filter out ANSI escape sequences and non-printable characters
-const cleanInput = (input) => {
-    // Remove ANSI escape sequences (e.g., \x1b[O, \x1b[I) and non-printable characters except \r
-    return input.replace(/[\x00-\x1F\x7F-\x9F\x1B\[O\x1B\[I]/g, '').trim();
-};
+const api = window.electronAPI;
 
 function createTerminal(tabId, container) {
     const term = new Terminal({
@@ -17,7 +11,7 @@ function createTerminal(tabId, container) {
         theme: { background: '#1a1a1a' },
         disableStdin: false,
         convertEol: true,
-        windowsMode: process.platform === 'win32',
+        windowsMode: api.platform === 'win32',
         allowProposedApi: true,
         promptLength: 0,
     });
@@ -31,7 +25,6 @@ function createTerminal(tabId, container) {
     };
 
     const termDiv = document.createElement('div');
-
     termDiv.id = `terminal-${tabId}`;
     termDiv.className = 'absolute top-0 left-0 w-full h-full hidden';
     container.appendChild(termDiv);
@@ -46,7 +39,7 @@ function createTerminal(tabId, container) {
     term.element.style.msUserSelect = 'text';
 
     // Initialize local shell
-    ipcRenderer.invoke('spawn-local-shell', { tabId, disableEcho: false }).then((result) => {
+    api.spawnLocalShell({ tabId, disableEcho: false }).then((result) => {
         if (result.success) {
             state.shellStream = true;
             fitAddon.fit();
@@ -60,11 +53,11 @@ function createTerminal(tabId, container) {
     });
 
     // Handle local shell data
-    ipcRenderer.on(`pty-data-${tabId}`, (event, data) => {
+    api.onPtyData(tabId, (data) => {
         term.write(data);
     });
 
-    ipcRenderer.on(`pty-close-${tabId}`, () => {
+    api.onPtyClose(tabId, () => {
         term.write('\r\nLocal shell closed.\r\n');
         state.shellStream = false;
         state.shellType = 'local';
@@ -72,7 +65,7 @@ function createTerminal(tabId, container) {
     });
 
     // Handle SSH data
-    ipcRenderer.on(`ssh-data-${tabId}`, (event, data) => {
+    api.onSshData(tabId, (data) => {
         term.write(data);
 
         if (!state.currentCommand.length) {
@@ -83,16 +76,14 @@ function createTerminal(tabId, container) {
             console.log("Full-screen app detected (vim), sending resize event...");
             setTimeout(() => {
                 fitAddon.fit();
-                ipcRenderer.send('resize-ssh', { tabId: tabId, cols: term.cols, rows: term.rows });
+                api.resizeSsh({ tabId, cols: term.cols, rows: term.rows });
             }, 50);
         }
     });
 
-    ipcRenderer.on(`ssh-close-${tabId}`, () => {
+    api.onSshClose(tabId, () => {
         console.log(`SSH session closed for tab ${tabId}`);
-
-        // Instead of switching back to PowerShell, close the tab
-        ipcRenderer.send('close-tab', tabId);
+        api.closeTab(tabId);
     });
 
     // Terminal input handling
@@ -101,7 +92,6 @@ function createTerminal(tabId, container) {
 
         let modifiedData = data;
 
-        // Mapping special sequences, so they don't get stuck.
         const specialKeyMap = {
             '\x1b[5~': '\x1b[5~', // Page Up
             '\x1b[6~': '\x1b[6~', // Page Down
@@ -120,9 +110,9 @@ function createTerminal(tabId, container) {
         }
 
         if (state.shellType === 'ssh') {
-            ipcRenderer.send('ssh-input', { tabId: tabId, data: modifiedData });
+            api.sshInput({ tabId, data: modifiedData });
         } else if (state.shellType === 'local') {
-            ipcRenderer.send('pty-input', { tabId: tabId, data: modifiedData });
+            api.ptyInput({ tabId, data: modifiedData });
         }
     });
 
@@ -132,9 +122,9 @@ function createTerminal(tabId, container) {
                 console.log(`Resizing terminal: ${cols}x${rows}`);
 
                 if (state.shellType === 'local') {
-                    ipcRenderer.send('resize-pty', { tabId: tabId, cols, rows });
+                    api.resizePty({ tabId, cols, rows });
                 } else if (state.shellType === 'ssh') {
-                    ipcRenderer.send('resize-ssh', { tabId: tabId, cols, rows });
+                    api.resizeSsh({ tabId, cols, rows });
                 }
 
                 fitAddon.fit();
@@ -155,7 +145,7 @@ function createTerminal(tabId, container) {
 }
 
 async function connectSSH(tabId, term, state, options) {
-    const settings = await ipcRenderer.invoke('get-settings').catch(err => {
+    const settings = await api.getSettings().catch(err => {
         console.error('Failed to get settings:', err);
         return { useSshKey: false, sshKeyPath: '' };
     });
@@ -170,17 +160,18 @@ async function connectSSH(tabId, term, state, options) {
     };
 
     term.write(`\r\nConnecting to ${options.username || 'unknown'}@${options.host}...\r\n`);
-    const result = await ipcRenderer.invoke('connect-ssh', { tabId, options: finalOptions }).catch(err => {
+    const result = await api.connectSSH({ tabId, options: { ...finalOptions, cols: term.cols, rows: term.rows } }).catch(err => {
         return { success: false, error: err.message };
     });
 
     if (result.success) {
-        ipcRenderer.send('ssh-input', { tabId: tabId, data: 'export TERM=xterm-256color\n' });
+        api.sshInput({ tabId, data: 'export TERM=xterm-256color\n' });
         term.write('Connected!\r\n');
         term.reset();
         state.shellType = 'ssh';
         state.shellStream = true;
-        ipcRenderer.send('update-tab-display-name', { tabId, newName: `${options.username || 'user'}@${options.host}` });
+        api.updateTabName({ tabId, newName: `${options.username || 'user'}@${options.host}` });
+        api.resizeSsh({ tabId, cols: term.cols, rows: term.rows });
     } else {
         term.write(`\r\nConnection failed: ${result.error}\r\n`);
         state.shellType = 'local';

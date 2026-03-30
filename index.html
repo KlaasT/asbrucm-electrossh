@@ -1,12 +1,187 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-bs-theme="dark">
 <head>
+    <meta charset="UTF-8" />
     <title>asbru-cm ElectroSSH</title>
-    <link rel="stylesheet" href="/styles/output.css" />
-    <link rel="stylesheet" href="/node_modules/xterm/css/xterm.css" />
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="bg-gray-900 text-white">
-<div id="app"></div>
-<script type="module" src="/src/main.js"></script>
+<body style="height: 100vh; overflow: hidden; background: #1a1a1a;">
+
+<div id="app" x-data="appState()" class="d-flex h-100" x-cloak>
+
+    <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+    <div id="sidebar" class="d-flex flex-column flex-shrink-0 p-3 border-end border-secondary"
+         style="width: 240px; background: #212529; overflow-y: auto;">
+
+        <h6 class="text-secondary text-uppercase mb-3" style="font-size: 0.7rem; letter-spacing: 0.08em;">Favorites</h6>
+
+        <div x-show="favorites.length === 0" class="text-secondary small">No favorites yet.</div>
+
+        <template x-for="(group, groupName) in groupedFavorites" :key="groupName">
+            <div class="mb-2">
+                <!-- Group header -->
+                <div @click="toggleGroup(groupName)"
+                     class="d-flex align-items-center gap-1 mb-1 px-1 py-1 rounded"
+                     style="cursor: pointer; user-select: none;"
+                     @mouseover="$el.style.background='rgba(255,255,255,0.05)'"
+                     @mouseout="$el.style.background=''">
+                    <span class="text-secondary" style="font-size: 0.65rem;" x-text="expandedGroups[groupName] ? '▾' : '▸'"></span>
+                    <span class="text-light small fw-semibold" x-text="groupName"></span>
+                </div>
+
+                <!-- Group items -->
+                <div x-show="expandedGroups[groupName]">
+                    <template x-for="fav in group" :key="fav.id || fav.displayName">
+                        <div @dblclick="connectToFavorite(fav)"
+                             class="fav-item d-flex align-items-center justify-content-between px-2 py-1 rounded mb-1"
+                             style="cursor: pointer;">
+                            <span class="text-light small text-truncate flex-grow-1"
+                                  x-text="fav.displayName || 'Unnamed'"></span>
+                            <div class="d-flex gap-1 ms-2 flex-shrink-0">
+                                <button class="btn btn-sm btn-outline-secondary border-0 py-0 px-1"
+                                        style="font-size: 0.65rem;"
+                                        @click.stop="openEditFavorite(fav)">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger border-0 py-0 px-1"
+                                        style="font-size: 0.65rem;"
+                                        @click.stop="removeFavorite(fav.id)">✕</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- ── Main area ──────────────────────────────────────────────────────── -->
+    <div class="d-flex flex-column flex-grow-1 overflow-hidden">
+
+        <!-- Tab bar -->
+        <ul class="nav nav-tabs flex-shrink-0 px-2 pt-2" style="border-bottom-color: #495057;">
+            <template x-for="t in terminals" :key="t.id">
+                <li class="nav-item">
+                    <a class="nav-link d-flex align-items-center gap-2 py-1 px-3"
+                       :class="{ active: t.id === activeTabId }"
+                       @click="switchTab(t.id)"
+                       style="cursor: pointer; font-size: 0.85rem;">
+                        <span x-text="t.displayName || t.id"></span>
+                        <span class="tab-close" @click.stop="closeTab(t.id)">✕</span>
+                    </a>
+                </li>
+            </template>
+        </ul>
+
+        <!-- Terminal container -->
+        <div id="terminal-container"
+             class="flex-grow-1 position-relative"
+             style="background: #1a1a1a; overflow: hidden; min-height: 0;">
+        </div>
+
+        <!-- Bottom toolbar -->
+        <div class="d-flex justify-content-end gap-2 p-2 flex-shrink-0 border-top border-secondary"
+             style="background: #212529;">
+            <button class="btn btn-sm btn-primary" @click="addTab()">New Tab</button>
+            <button class="btn btn-sm btn-secondary" @click="showSettingsModal = true; loadSettings()">Settings</button>
+            <button class="btn btn-sm btn-secondary" @click="openAddFavorite()">Add Favorite</button>
+        </div>
+    </div>
+
+    <!-- ── Settings modal ─────────────────────────────────────────────────── -->
+    <div x-show="showSettingsModal"
+         class="position-fixed top-0 start-0 w-100 h-100"
+         style="background: rgba(0,0,0,0.75); z-index: 1050;">
+        <div class="d-flex w-100 h-100 align-items-center justify-content-center">
+        <div class="card border-secondary" style="width: 420px; background: #212529;">
+            <div class="card-header border-secondary d-flex align-items-center justify-content-between">
+                <h6 class="mb-0">Settings</h6>
+                <button class="btn-close btn-close-white" @click="showSettingsModal = false"></button>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="useSshKey" x-model="useSshKey" />
+                        <label class="form-check-label" for="useSshKey">Use SSH Key globally</label>
+                    </div>
+                </div>
+                <div x-show="useSshKey" class="mb-3">
+                    <label class="form-label small text-secondary">SSH Key Path</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" x-model="sshKeyPath" readonly placeholder="No key selected" />
+                        <button class="btn btn-outline-secondary" @click="selectSshKeyForSettings()">Browse…</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer border-secondary d-flex justify-content-end gap-2">
+                <button class="btn btn-sm btn-primary" @click="saveSettings()">Save</button>
+                <button class="btn btn-sm btn-secondary" @click="showSettingsModal = false">Cancel</button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <!-- ── Favorite modal ─────────────────────────────────────────────────── -->
+    <div x-show="showFavoriteModal"
+         class="position-fixed top-0 start-0 w-100 h-100"
+         style="background: rgba(0,0,0,0.75); z-index: 1050;">
+        <div class="d-flex w-100 h-100 align-items-center justify-content-center">
+        <div class="card border-secondary" style="width: 460px; background: #212529;">
+            <div class="card-header border-secondary d-flex align-items-center justify-content-between">
+                <h6 class="mb-0" x-text="editingFavorite ? 'Edit Favorite' : 'Add Favorite'"></h6>
+                <button class="btn-close btn-close-white" @click="showFavoriteModal = false"></button>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label small text-secondary">Display Name</label>
+                    <input type="text" class="form-control form-control-sm"
+                           x-model="favoriteForm.displayName" placeholder="My Server" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small text-secondary">Host <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm"
+                           x-model="favoriteForm.hostname" placeholder="192.168.1.1" />
+                </div>
+                <div class="row mb-3">
+                    <div class="col-8">
+                        <label class="form-label small text-secondary">Username</label>
+                        <input type="text" class="form-control form-control-sm"
+                               x-model="favoriteForm.username" placeholder="root" />
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label small text-secondary">Port</label>
+                        <input type="number" class="form-control form-control-sm"
+                               x-model="favoriteForm.port" placeholder="22" />
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small text-secondary">Password (optional)</label>
+                    <input type="password" class="form-control form-control-sm"
+                           x-model="favoriteForm.password" placeholder="Leave empty to use SSH key" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small text-secondary">SSH Key Path (optional)</label>
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control"
+                               x-model="favoriteForm.keyPath" placeholder="Path to private key" />
+                        <button class="btn btn-outline-secondary" @click="selectSshKeyForFavorite()">Browse…</button>
+                    </div>
+                </div>
+                <div class="mb-1">
+                    <label class="form-label small text-secondary">Group (optional)</label>
+                    <input type="text" class="form-control form-control-sm"
+                           x-model="favoriteForm.group" placeholder="Ungrouped" />
+                </div>
+            </div>
+            <div class="card-footer border-secondary d-flex justify-content-end gap-2">
+                <button class="btn btn-sm btn-primary"
+                        :disabled="!favoriteForm.hostname"
+                        @click="saveFavorite()">Save</button>
+                <button class="btn btn-sm btn-secondary" @click="showFavoriteModal = false">Cancel</button>
+            </div>
+        </div>
+        </div>
+    </div>
+
+</div>
+
+<script type="module" src="/src/app.js"></script>
 </body>
 </html>
