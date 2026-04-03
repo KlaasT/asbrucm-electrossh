@@ -95,9 +95,7 @@ try {
     function createWindow() {
         // In dev: __dirname = project root (electron starts with "electron .")
         // preload.mjs is built to dist-electron/ by vite-plugin-electron
-        const preloadPath = isDev
-            ? path.join(__dirname, 'dist-electron', 'preload.mjs')
-            : path.join(__dirname, 'preload.mjs');
+        const preloadPath = path.join(__dirname, 'dist-electron', 'preload.mjs');
 
         const win = new BrowserWindow({
             width: 800,
