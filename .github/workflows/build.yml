@@ -30,7 +30,7 @@ jobs:
         run: |
           echo "Installing dependencies..."
           npm install --verbose
-          echo "Dependencies installed successfully.
+          echo "Dependencies installed successfully."
 
       - name: Build app
         run: |
