@@ -9,10 +9,6 @@ Basiert auf dem aktuellen Stand der Codebase (Alpine.js + Bootstrap + Electron).
 **Aktueller Stand:** Kein visuelles Feedback ob ein Tab lokal, verbunden oder getrennt ist.
 **Verbesserung:** Farbiger Punkt oder Icon im Tab-Label: grau = lokal, grün = SSH verbunden, rot = Verbindung unterbrochen.
 
-### SSH-Reconnect nach Verbindungsabbruch
-**Aktueller Stand:** Wenn eine SSH-Session schließt (`ssh-close`-Event), wird der Tab sofort geschlossen (`ipcRenderer.send('close-tab', tabId)`). Der Nutzer verliert den Tab ohne Chance auf Reconnect.
-**Verbesserung:** Bei unerwartetem Verbindungsabbruch stattdessen eine Meldung im Terminal anzeigen ("Connection lost. Press R to reconnect.") und den Tab offen lassen.
-
 ### Suche / Filter in der Seitenleiste
 **Aktueller Stand:** Bei vielen Favorites ist kein Filtern möglich.
 **Verbesserung:** Einfaches Suchfeld oben in der Sidebar, das die Favorites live filtert (`x-show` auf Basis eines `searchQuery`-Feldes).
@@ -51,6 +47,18 @@ Umsetzung über `globalShortcut` in `main.js` oder `keydown`-Listener im Rendere
 
 ## Niedrige Priorität / Nice-to-have
 
+### RDP-Unterstützung (externer Client)
+**Ansatz:** RDP bleibt ein Zusatzfeature — der Fokus der App liegt auf SSH. Favorites bekommen einen `protocol`-Typ (`ssh` / `rdp`). Bei RDP-Favorites wird der systemseitige RDP-Client als externer Prozess gestartet, kein Einbetten in die App.
+
+**Windows:** `mstsc.exe /v:<host>` — immer verfügbar, kein Setup nötig.
+**Linux:** Konfigurierbar in den Settings — Nutzer wählt zwischen `xfreerdp`, `rdesktop` oder einem eigenen Befehl. Default: `xfreerdp`.
+
+**Umsetzung:**
+- Favorites-Formular: `protocol`-Feld hinzufügen (`ssh` als Default)
+- Settings: RDP-Client-Auswahl für Linux (`xfreerdp` / `rdesktop` / Custom Command)
+- `main.js`: neuer IPC-Handler `launch-rdp` der je nach OS den richtigen Client startet
+- Tab-Verhalten: RDP-Tabs zeigen einen Hinweis ("RDP session launched externally") statt einem Terminal
+
 ### SSH Jump Host / Bastion Support
 Verbindungen über einen Zwischenserver routen (`ProxyJump`-Äquivalent). Würde erfordern, die SSH-Verbindungslogik in `main.js` zu erweitern.
 
@@ -68,12 +76,3 @@ Protokollierung wann welche Verbindung aufgebaut und getrennt wurde (ohne Befehl
 
 ---
 
-## Technische Schulden (intern)
-
-| Problem | Datei | Beschreibung |
-|---|---|---|
-| `cleanInput`-Funktion ungenutzt | `src/terminal.js:7` | Definiert aber nie aufgerufen – entweder einsetzen oder entfernen |
-| Tailwind-Klassen im JS | `src/terminal.js:36` | `termDiv.className = 'absolute top-0 ...'` – Tailwind ist entfernt, die Klassen tun nichts; wird durch CSS in `app.css` nur zufällig gerettet |
-| README veraltet | `README.md` | Referenziert noch Tailwind, Vue und `npm run build:css` |
-| Kein Error-Handling in `loadFavorites` / `loadSettings` | `src/app.js` | Unbehandelte Promise-Rejections wenn IPC fehlschlägt |
-| Kein `preload.js` | `main.js` | Siehe Security-Abschnitt oben |

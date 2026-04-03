@@ -3,7 +3,7 @@ import { FitAddon } from 'xterm-addon-fit';
 
 const api = window.electronAPI;
 
-function createTerminal(tabId, container) {
+function createTerminal(tabId, container, { skipLocalShell = false } = {}) {
     const term = new Terminal({
         cursorBlink: true,
         allowTransparency: true,
@@ -22,15 +22,15 @@ function createTerminal(tabId, container) {
         shellType: 'local',
         shellStream: false,
         currentCommand: '',
+        sshOptions: null,
     };
 
     const termDiv = document.createElement('div');
     termDiv.id = `terminal-${tabId}`;
-    termDiv.className = 'absolute top-0 left-0 w-full h-full hidden';
+    termDiv.className = 'position-absolute top-0 start-0 w-100 h-100 d-none';
     container.appendChild(termDiv);
 
     term.open(termDiv);
-    term.write('Simple Terminal - Type "ssh [user@]host" to connect remotely\r\n');
     term.focus();
 
     term.element.style.userSelect = 'text';
@@ -38,19 +38,21 @@ function createTerminal(tabId, container) {
     term.element.style.MozUserSelect = 'text';
     term.element.style.msUserSelect = 'text';
 
-    // Initialize local shell
-    api.spawnLocalShell({ tabId, disableEcho: false }).then((result) => {
-        if (result.success) {
-            state.shellStream = true;
-            fitAddon.fit();
-        } else {
-            term.write('Failed to spawn local shell.\r\n');
-            console.error(`Failed to spawn local shell for tab ${tabId}`);
-        }
-    }).catch(err => {
-        term.write('Error initializing terminal.\r\n');
-        console.error(`Error spawning local shell for tab ${tabId}:`, err);
-    });
+    if (!skipLocalShell) {
+        term.write('Simple Terminal - Type "ssh [user@]host" to connect remotely\r\n');
+        api.spawnLocalShell({ tabId, disableEcho: false }).then((result) => {
+            if (result.success) {
+                state.shellStream = true;
+                fitAddon.fit();
+            } else {
+                term.write('Failed to spawn local shell.\r\n');
+                console.error(`Failed to spawn local shell for tab ${tabId}`);
+            }
+        }).catch(err => {
+            term.write('Error initializing terminal.\r\n');
+            console.error(`Error spawning local shell for tab ${tabId}:`, err);
+        });
+    }
 
     // Handle local shell data
     api.onPtyData(tabId, (data) => {
@@ -82,8 +84,15 @@ function createTerminal(tabId, container) {
     });
 
     api.onSshClose(tabId, () => {
-        console.log(`SSH session closed for tab ${tabId}`);
-        api.closeTab(tabId);
+        state.shellStream = false;
+        state.shellType = 'local';
+        if (state.sshOptions) {
+            term.write('\r\n\r\nConnection closed. Press any key to reconnect...\r\n');
+            const listener = term.onData(() => {
+                listener.dispose();
+                connectSSH(tabId, term, state, state.sshOptions);
+            });
+        }
     });
 
     // Terminal input handling
@@ -117,20 +126,8 @@ function createTerminal(tabId, container) {
     });
 
     term.onResize(({ cols, rows }) => {
-        if (state.shellStream) {
-            if (cols > 0 && rows > 0) {
-                console.log(`Resizing terminal: ${cols}x${rows}`);
-
-                if (state.shellType === 'local') {
-                    api.resizePty({ tabId, cols, rows });
-                } else if (state.shellType === 'ssh') {
-                    api.resizeSsh({ tabId, cols, rows });
-                }
-
-                fitAddon.fit();
-            } else {
-                console.warn(`Ignoring resize event with invalid values: cols=${cols}, rows=${rows}`);
-            }
+        if (state.shellStream && state.shellType === 'local' && cols > 0 && rows > 0) {
+            api.resizePty({ tabId, cols, rows });
         }
     });
 
@@ -144,22 +141,51 @@ function createTerminal(tabId, container) {
     return { id: tabId, term, state, fitAddon };
 }
 
+function promptTerminal(term, label, { mask = false } = {}) {
+    return new Promise((resolve) => {
+        term.write(label);
+        let input = '';
+        const listener = term.onData((data) => {
+            if (data === '\r' || data === '\n') {
+                listener.dispose();
+                term.write('\r\n');
+                resolve(input);
+            } else if (data === '\x7f' || data === '\b') {
+                if (input.length > 0) {
+                    input = input.slice(0, -1);
+                    if (!mask) term.write('\b \b');
+                }
+            } else if (data >= ' ') {
+                input += data;
+                term.write(mask ? '*' : data);
+            }
+        });
+    });
+}
+
 async function connectSSH(tabId, term, state, options) {
     const settings = await api.getSettings().catch(err => {
         console.error('Failed to get settings:', err);
         return { useSshKey: false, sshKeyPath: '' };
     });
 
-    term.write('Connecting...\r\n');
+    const finalOptions = { ...options };
 
-    const finalOptions = {
-        ...options,
-        keyPath: options.keyPath && options.keyPath.trim() !== ''
-            ? options.keyPath
-            : (settings.useSshKey && settings.sshKeyPath ? settings.sshKeyPath.trim() : null),
-    };
+    finalOptions.keyPath = options.keyPath && options.keyPath.trim() !== ''
+        ? options.keyPath
+        : (settings.useSshKey && settings.sshKeyPath ? settings.sshKeyPath.trim() : null);
 
-    term.write(`\r\nConnecting to ${options.username || 'unknown'}@${options.host}...\r\n`);
+    if (!finalOptions.username || finalOptions.username.trim() === '') {
+        finalOptions.username = await promptTerminal(term, `Username for ${options.host}: `);
+    }
+
+    if (!finalOptions.keyPath && (!finalOptions.password || finalOptions.password.trim() === '')) {
+        finalOptions.password = await promptTerminal(term, `Password for ${finalOptions.username}@${options.host}: `, { mask: true });
+    }
+
+    state.sshOptions = { ...finalOptions };
+
+    term.write(`Connecting to ${finalOptions.username}@${options.host}...\r\n`);
     const result = await api.connectSSH({ tabId, options: { ...finalOptions, cols: term.cols, rows: term.rows } }).catch(err => {
         return { success: false, error: err.message };
     });
@@ -170,11 +196,16 @@ async function connectSSH(tabId, term, state, options) {
         term.reset();
         state.shellType = 'ssh';
         state.shellStream = true;
-        api.updateTabName({ tabId, newName: `${options.username || 'user'}@${options.host}` });
+        api.updateTabName({ tabId, newName: `${finalOptions.username}@${options.host}` });
         api.resizeSsh({ tabId, cols: term.cols, rows: term.rows });
     } else {
         term.write(`\r\nConnection failed: ${result.error}\r\n`);
+        term.write('Press any key to retry...\r\n');
         state.shellType = 'local';
+        const listener = term.onData(() => {
+            listener.dispose();
+            connectSSH(tabId, term, state, state.sshOptions);
+        });
     }
 }
 

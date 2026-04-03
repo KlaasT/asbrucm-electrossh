@@ -65,7 +65,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: asbru-cm-electro-ssh-${{ matrix.os }}-${{ github.sha }}
+          name: electrossh-${{ matrix.os }}-${{ github.sha }}
           path: |
             dist/*.exe  # Windows installer
             dist/*.AppImage  # Linux AppImage

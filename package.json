@@ -1,7 +1,7 @@
 {
-  "name": "asbru-cm-electro-ssh",
-  "title": "Asbru-CM ElectroSSH",
-  "version": "0.0.1",
+  "name": "electrossh",
+  "title": "ElectroSSH",
+  "version": "0.0.2",
   "type": "module",
   "main": "main.js",
   "author": {
@@ -34,8 +34,8 @@
     "wait-for-localhost": "^4.1.0"
   },
   "build": {
-    "appId": "net.asbru-cm.ssh",
-    "productName": "Asbru-CM ElectroSSH",
+    "appId": "io.electrossh.app",
+    "productName": "ElectroSSH",
     "win": {
       "icon": "images/icon.ico",
       "target": [

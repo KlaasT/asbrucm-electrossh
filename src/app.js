@@ -11,6 +11,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('appState', () => ({
         terminals: [],
         activeTabId: null,
+        contextMenu: { visible: false, x: 0, y: 0, tabId: null },
 
         showSettingsModal: false,
         showFavoriteModal: false,
@@ -38,10 +39,19 @@ document.addEventListener('alpine:init', () => {
             this.loadFavorites();
             this.loadSettings();
 
-            window.addEventListener('resize', () => {
-                const t = this.terminals.find(t => t.id === this.activeTabId);
-                if (t) resizeTerminal(t.term, t.fitAddon);
+            let resizeTimer = null;
+            const resizeObserver = new ResizeObserver(() => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    const t = this.terminals.find(t => t.id === this.activeTabId);
+                    if (!t) return;
+                    resizeTerminal(t.term, t.fitAddon);
+                    if (t.state.shellStream && t.state.shellType === 'ssh') {
+                        api.resizeSsh({ tabId: t.id, cols: t.term.cols, rows: t.term.rows });
+                    }
+                }, 100);
             });
+            resizeObserver.observe(document.getElementById('terminal-container'));
 
             api.onFavoritesUpdated(() => this.loadFavorites());
             api.onCloseTab((tabId) => this.closeTab(tabId));
@@ -65,7 +75,7 @@ document.addEventListener('alpine:init', () => {
             this.activeTabId = tabId;
             this.terminals.forEach(t => {
                 const div = document.getElementById(`terminal-${t.id}`);
-                if (div) div.classList.toggle('hidden', t.id !== tabId);
+                if (div) div.classList.toggle('d-none', t.id !== tabId);
             });
             setTimeout(() => {
                 const t = this.terminals.find(t => t.id === tabId);
@@ -100,7 +110,10 @@ document.addEventListener('alpine:init', () => {
         // ── Favorites ────────────────────────────────────────────────────────
 
         async loadFavorites() {
-            const favs = await api.getFavorites();
+            const favs = await api.getFavorites().catch(err => {
+                console.error('Failed to load favorites:', err);
+                return [];
+            });
             this.favorites = JSON.parse(JSON.stringify(favs));
             this.favorites.forEach(fav => {
                 const group = fav.group || 'Ungrouped';
@@ -129,9 +142,32 @@ document.addEventListener('alpine:init', () => {
             this.favorites = updated;
         },
 
+        showContextMenu(event, tabId) {
+            this.contextMenu = { visible: true, x: event.clientX, y: event.clientY, tabId };
+        },
+
+        async cloneTab(tabId) {
+            const source = this.terminals.find(t => t.id === tabId);
+            if (!source) return;
+
+            if (source.state.sshOptions) {
+                const newTabId = `Tab-${nanoid(5)}`;
+                const terminal = createTerminal(newTabId, document.getElementById('terminal-container'), { skipLocalShell: true });
+                terminal.displayName = source.displayName;
+                this.terminals.push(terminal);
+                this.switchTab(newTabId);
+                setTimeout(async () => {
+                    resizeTerminal(terminal.term, terminal.fitAddon);
+                    await connectSSH(newTabId, terminal.term, terminal.state, source.state.sshOptions);
+                }, 100);
+            } else {
+                this.addTab();
+            }
+        },
+
         async connectToFavorite(favorite) {
             const tabId = `Tab-${nanoid(5)}`;
-            const terminal = createTerminal(tabId, document.getElementById('terminal-container'));
+            const terminal = createTerminal(tabId, document.getElementById('terminal-container'), { skipLocalShell: true });
             terminal.displayName = favorite.displayName;
             this.terminals.push(terminal);
             this.switchTab(tabId);
@@ -206,7 +242,10 @@ document.addEventListener('alpine:init', () => {
         // ── Settings modal ───────────────────────────────────────────────────
 
         async loadSettings() {
-            const settings = await api.getSettings();
+            const settings = await api.getSettings().catch(err => {
+                console.error('Failed to load settings:', err);
+                return { useSshKey: false, sshKeyPath: '' };
+            });
             this.useSshKey = settings.useSshKey;
             this.sshKeyPath = settings.sshKeyPath;
         },

@@ -2,7 +2,7 @@
 <html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8" />
-    <title>asbru-cm ElectroSSH</title>
+    <title>ElectroSSH</title>
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body style="height: 100vh; overflow: hidden; background: #1a1a1a;">
@@ -62,6 +62,7 @@
                     <a class="nav-link d-flex align-items-center gap-2 py-1 px-3"
                        :class="{ active: t.id === activeTabId }"
                        @click="switchTab(t.id)"
+                       @contextmenu.prevent="showContextMenu($event, t.id)"
                        style="cursor: pointer; font-size: 0.85rem;">
                         <span x-text="t.displayName || t.id"></span>
                         <span class="tab-close" @click.stop="closeTab(t.id)">✕</span>
@@ -69,6 +70,20 @@
                 </li>
             </template>
         </ul>
+
+        <!-- Tab context menu -->
+        <div x-show="contextMenu.visible"
+             @click.away="contextMenu.visible = false"
+             :style="`position: fixed; top: ${contextMenu.y}px; left: ${contextMenu.x}px; z-index: 9999;`"
+             class="dropdown-menu show shadow">
+            <button class="dropdown-item" @click="cloneTab(contextMenu.tabId); contextMenu.visible = false">
+                Clone Tab
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item text-danger" @click="closeTab(contextMenu.tabId); contextMenu.visible = false">
+                Close Tab
+            </button>
+        </div>
 
         <!-- Terminal container -->
         <div id="terminal-container"
